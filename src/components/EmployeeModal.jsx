@@ -41,7 +41,7 @@ export default function EmployeeModal({ emp, onSave, onClose }) {
           Nombre
           <input value={form.name} onChange={e => set("name", e.target.value)} style={inputSt} placeholder="Nombre completo" />
         </label>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 56px", gap:12 }}>
           <label style={labelSt}>
             Rol
             <select value={form.role} onChange={e => set("role", e.target.value)} style={inputSt}>
@@ -51,6 +51,10 @@ export default function EmployeeModal({ emp, onSave, onClose }) {
           <label style={labelSt}>
             Horas anuales
             <input type="number" value={form.annualHours} onChange={e => set("annualHours", Number(e.target.value))} style={inputSt} />
+          </label>
+          <label style={labelSt}>
+            Color
+            <input type="color" value={form.color || ROLE_COLORS[form.role] || "#94a3b8"} onChange={e => set("color", e.target.value)} style={{ width:"100%", height:34, padding:2, border:"1px solid rgba(255,255,255,0.1)", borderRadius:6, background:"rgba(255,255,255,0.04)", cursor:"pointer" }} />
           </label>
         </div>
 
