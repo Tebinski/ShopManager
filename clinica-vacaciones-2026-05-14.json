@@ -1,0 +1,215 @@
+{
+  "version": 1,
+  "exportedAt": "2026-05-14T13:42:27.341Z",
+  "employees": [
+    {
+      "id": "e1",
+      "name": "Tim",
+      "role": "veterinario",
+      "annualHours": 1760,
+      "schedule": [
+        {
+          "start": "08:30",
+          "end": "15:00"
+        },
+        {
+          "start": "08:30",
+          "end": "15:00"
+        },
+        {
+          "start": "08:30",
+          "end": "15:00"
+        },
+        {
+          "start": "08:30",
+          "end": "15:00"
+        },
+        {
+          "start": "08:30",
+          "end": "14:00"
+        },
+        null,
+        null
+      ]
+    },
+    {
+      "id": "e2",
+      "name": "Vet2",
+      "role": "veterinario",
+      "annualHours": 1760,
+      "schedule": [
+        {
+          "start": "12:00",
+          "end": "19:00"
+        },
+        {
+          "start": "12:00",
+          "end": "19:00"
+        },
+        {
+          "start": "12:00",
+          "end": "19:00"
+        },
+        {
+          "start": "12:00",
+          "end": "19:00"
+        },
+        {
+          "start": "12:00",
+          "end": "19:00"
+        },
+        null,
+        null
+      ]
+    },
+    {
+      "id": "vq69c0e",
+      "name": "Ana Valera",
+      "role": "veterinario",
+      "annualHours": 1760,
+      "schedule": [
+        {
+          "start": "08:30",
+          "end": "19:00"
+        },
+        {
+          "start": "08:30",
+          "end": "14:30"
+        },
+        null,
+        {
+          "start": "08:30",
+          "end": "19:00"
+        },
+        {
+          "start": "08:30",
+          "end": "19:00"
+        },
+        null,
+        null
+      ]
+    },
+    {
+      "id": "ktxd1tu",
+      "name": "Vet3",
+      "role": "veterinario",
+      "annualHours": 1760,
+      "schedule": [
+        {
+          "start": "09:00",
+          "end": "17:00"
+        },
+        {
+          "start": "09:00",
+          "end": "17:00"
+        },
+        {
+          "start": "09:00",
+          "end": "17:00"
+        },
+        {
+          "start": "09:00",
+          "end": "17:00"
+        },
+        {
+          "start": "09:00",
+          "end": "17:00"
+        },
+        null,
+        null
+      ]
+    },
+    {
+      "id": "38bhnlz",
+      "name": "Boss1",
+      "role": "jefe",
+      "annualHours": 1760,
+      "schedule": [
+        {
+          "start": "09:00",
+          "end": "17:00"
+        },
+        null,
+        {
+          "start": "09:00",
+          "end": "17:00"
+        },
+        null,
+        {
+          "start": "09:00",
+          "end": "17:00"
+        },
+        null,
+        null
+      ]
+    },
+    {
+      "id": "fdsqia5",
+      "name": "Aux1",
+      "role": "auxiliar",
+      "annualHours": 1760,
+      "schedule": [
+        {
+          "start": "09:00",
+          "end": "17:00"
+        },
+        {
+          "start": "09:00",
+          "end": "17:00"
+        },
+        {
+          "start": "09:00",
+          "end": "17:00"
+        },
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": "gj4quz4",
+      "name": "Recep1",
+      "role": "recepcion",
+      "annualHours": 1760,
+      "schedule": [
+        {
+          "start": "09:00",
+          "end": "17:00"
+        },
+        {
+          "start": "09:00",
+          "end": "17:00"
+        },
+        {
+          "start": "09:00",
+          "end": "17:00"
+        },
+        {
+          "start": "09:00",
+          "end": "17:00"
+        },
+        {
+          "start": "09:00",
+          "end": "17:00"
+        },
+        null,
+        null
+      ]
+    }
+  ],
+  "vacations": {
+    "e1": {
+      "2026-05-09": true,
+      "2026-05-15": true,
+      "2026-05-20": true,
+      "2026-05-25": true
+    },
+    "e2": {},
+    "vq69c0e": {
+      "2026-07-10": true,
+      "2026-07-13": true,
+      "2026-07-14": true
+    }
+  }
+}

@@ -1,17 +1,22 @@
-import { CLINIC_OPEN, CLINIC_SPAN, ROLE_COLORS } from "../constants/index.js";
+import { CLINIC_OPEN, CLINIC_CLOSE, ROLE_COLORS } from "../constants/index.js";
 import { fromMin } from "../utils/time.js";
 import { getWorkingSlots, getCoverageGaps } from "../utils/coverage.js";
 
-export default function CoverageTimeline({ dayOfWeek, employees, vacations, dayStr, compact }) {
-  const slots  = getWorkingSlots(dayOfWeek, employees, vacations, dayStr);
-  const gaps   = getCoverageGaps(slots);
+export default function CoverageTimeline({ dayOfWeek, employees, vacations, dayStr, compact, clinicOpen = CLINIC_OPEN, clinicClose = CLINIC_CLOSE, assignedEmpId }) {
+  const base = getWorkingSlots(dayOfWeek, employees, vacations, dayStr);
+  const assignedEmp = assignedEmpId ? employees.find(e => e.id === assignedEmpId) : null;
+  const slots = assignedEmp && !vacations[assignedEmpId]?.[dayStr] && !base.some(s => s.empId === assignedEmpId)
+    ? [...base, { empId: assignedEmpId, name: assignedEmp.name, role: assignedEmp.role, startMin: clinicOpen, endMin: clinicClose }]
+    : base;
+  const gaps   = getCoverageGaps(slots, clinicOpen, clinicClose);
   const hasGap = gaps.length > 0;
 
+  const clinicSpan = clinicClose - clinicOpen;
   const W     = compact ? 120 : 320;
-  const ratio = W / CLINIC_SPAN;
+  const ratio = W / clinicSpan;
 
   const ticks = [];
-  for (let t = CLINIC_OPEN; t <= CLINIC_CLOSE; t += 120) ticks.push(t);
+  for (let t = clinicOpen; t <= clinicClose; t += 120) ticks.push(t);
 
   if (compact) {
     return (

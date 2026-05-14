@@ -1,14 +1,22 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { MONTHS, DAYS_SHORT, ROLE_COLORS, DEFAULT_SCHEDULE, SAMPLE_EMPLOYEES } from "./constants/index.js";
+import { MONTHS, DAYS_SHORT, ROLE_COLORS, DEFAULT_SCHEDULE, SAMPLE_EMPLOYEES, DEFAULT_CLINIC_CONFIG } from "./constants/index.js";
 import { getDaysInMonth, getFirstDow, dkey, parseDkey, uid } from "./utils/calendar.js";
-import { shiftHours } from "./utils/time.js";
+import { shiftHours, toMin } from "./utils/time.js";
 import { getWorkingSlots, getCoverageGaps } from "./utils/coverage.js";
 import { useStorage } from "./hooks/useStorage.js";
 import CoverageTimeline from "./components/CoverageTimeline.jsx";
 import EmployeeModal    from "./components/EmployeeModal.jsx";
+import TimeInput        from "./components/TimeInput.jsx";
 import DayDetail        from "./components/DayDetail.jsx";
 import YearMini         from "./components/YearMini.jsx";
 import RoleBadge        from "./components/RoleBadge.jsx";
+
+function getISOWeek(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+}
 
 export default function App() {
   const today = new Date();
@@ -24,6 +32,10 @@ export default function App() {
   const [detailDay,   setDetailDay]   = useState(null);
   const [showYear,    setShowYear]    = useState(true);
   const [importMsg,   setImportMsg]   = useState(null);
+  const [extRate,      setExtRate]      = useState(40);
+  const [clinicConfig, setClinicConfig] = useState(DEFAULT_CLINIC_CONFIG);
+  const [dayAssignments, setDayAssignments] = useState({});
+  const [fontScale,    setFontScale]   = useState(1);
 
   const fileInputRef = useRef(null);
 
@@ -31,14 +43,36 @@ export default function App() {
     if (!initialData) return;
     if (Array.isArray(initialData.employees) && initialData.employees.length) setEmployees(initialData.employees);
     if (initialData.vacations && typeof initialData.vacations === "object") setVacations(initialData.vacations);
+    if (initialData.clinicConfig && typeof initialData.clinicConfig === "object") setClinicConfig(initialData.clinicConfig);
+    if (initialData.dayAssignments && typeof initialData.dayAssignments === "object") setDayAssignments(initialData.dayAssignments);
   }, [initialData]);
+
+  function dayClinicHours(mb) {
+    const cfg = mb <= 4 ? clinicConfig.weekday : mb === 5 ? clinicConfig.saturday : clinicConfig.sunday;
+    return cfg ? { open: toMin(cfg.open), close: toMin(cfg.close) } : null;
+  }
+
+  function withAssignment(slots, dayStr, clinicHours) {
+    const empId = dayAssignments[dayStr];
+    if (!empId || !clinicHours || vacations[empId]?.[dayStr]) return slots;
+    const emp = employees.find(e => e.id === empId);
+    if (!emp || slots.some(s => s.empId === empId)) return slots;
+    return [...slots, { empId, name: emp.name, role: emp.role, startMin: clinicHours.open, endMin: clinicHours.close }];
+  }
+
+  function assignDay(dayStr, empId) {
+    const next = { ...dayAssignments, [dayStr]: empId || undefined };
+    if (!empId) delete next[dayStr];
+    setDayAssignments(next);
+    persist({ employees, vacations, clinicConfig, dayAssignments: next });
+  }
 
   function saveEmployee(emp) {
     const next = employees.some(e => e.id === emp.id)
       ? employees.map(e => e.id === emp.id ? emp : e)
       : [...employees, emp];
     setEmployees(next);
-    persist({ employees:next, vacations });
+    persist({ employees:next, vacations, clinicConfig, dayAssignments });
     setEditingEmp(null);
   }
 
@@ -49,7 +83,7 @@ export default function App() {
     setEmployees(next);
     setVacations(vacs);
     if (selectedEmp === id) setSelectedEmp(null);
-    persist({ employees:next, vacations:vacs });
+    persist({ employees:next, vacations:vacs, clinicConfig, dayAssignments });
   }
 
   function toggleVacation(empId, day) {
@@ -57,7 +91,7 @@ export default function App() {
     if (ev[day]) delete ev[day]; else ev[day] = true;
     const next = { ...vacations, [empId]:ev };
     setVacations(next);
-    persist({ employees, vacations:next });
+    persist({ employees, vacations:next, clinicConfig, dayAssignments });
   }
 
   function exportState() {
@@ -81,7 +115,7 @@ export default function App() {
         setEmployees(data.employees);
         setVacations(data.vacations || {});
         setSelectedEmp(null);
-        persist({ employees:data.employees, vacations:data.vacations || {} });
+        persist({ employees:data.employees, vacations:data.vacations || {}, clinicConfig, dayAssignments });
         setImportMsg({ ok:true, text:`✓ Cargado: ${data.employees.length} empleados` });
       } catch (err) {
         setImportMsg({ ok:false, text:`✕ Error: ${err.message}` });
@@ -106,14 +140,45 @@ export default function App() {
     return map;
   }, [employees, vacations]);
 
+  const monthlyCost = useMemo(() => {
+    const days = getDaysInMonth(viewYear, viewMonth);
+    let totalMin = 0;
+    for (let d = 1; d <= days; d++) {
+      const dow = new Date(viewYear, viewMonth, d).getDay();
+      const mb  = dow === 0 ? 6 : dow - 1;
+      const dh  = dayClinicHours(mb);
+      if (!dh) continue;
+      const ds    = dkey(viewYear, viewMonth, d);
+      const slots = withAssignment(getWorkingSlots(mb, employees, vacations, ds), ds, dh);
+      getCoverageGaps(slots, dh.open, dh.close).forEach(g => { totalMin += g.endMin - g.startMin; });
+    }
+    return { hours: totalMin / 60, cost: (totalMin / 60) * extRate };
+  }, [viewYear, viewMonth, employees, vacations, extRate, clinicConfig, dayAssignments]);
+
   function prevMonth() { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); }
   function nextMonth() { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); }
 
-  const dim   = getDaysInMonth(viewYear, viewMonth);
-  const fd    = getFirstDow(viewYear, viewMonth);
+  const dim = getDaysInMonth(viewYear, viewMonth);
+  const fd  = getFirstDow(viewYear, viewMonth);
+
   const cells = [];
-  for (let i = 0; i < fd; i++) cells.push(null);
-  for (let d = 1; d <= dim; d++) cells.push(d);
+  for (let i = fd; i > 0; i--) {
+    const d = new Date(viewYear, viewMonth, 1 - i);
+    cells.push({ day: d.getDate(), month: d.getMonth(), year: d.getFullYear(), outside: true });
+  }
+  for (let d = 1; d <= dim; d++) {
+    cells.push({ day: d, month: viewMonth, year: viewYear, outside: false });
+  }
+  const rem = cells.length % 7;
+  if (rem > 0) {
+    for (let i = 1; i <= 7 - rem; i++) {
+      const d = new Date(viewYear, viewMonth + 1, i);
+      cells.push({ day: d.getDate(), month: d.getMonth(), year: d.getFullYear(), outside: true });
+    }
+  }
+
+  const weeks = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
 
   const saveLabel = saveStatus === "saving" ? "● GUARDANDO…" : saveStatus === "nostorage" ? "○ SIN ALMACENAMIENTO" : "● GUARDADO";
   const saveColor = saveStatus === "saving" ? "#fbbf24" : saveStatus === "nostorage" ? "#475569" : "#1a4030";
@@ -125,7 +190,7 @@ export default function App() {
   );
 
   return (
-    <div style={{ minHeight:"100vh", background:"#070e18", color:"#e2e8f0", fontFamily:"monospace", padding:"20px 16px" }}>
+    <div style={{ minHeight:"100vh", background:"#070e18", color:"#e2e8f0", fontFamily:"monospace", padding:"20px 16px", zoom:fontScale }}>
       <div style={{ position:"fixed", inset:0, pointerEvents:"none", backgroundImage:"radial-gradient(circle at 15% 15%,#0a2040 0%,transparent 50%),radial-gradient(circle at 85% 85%,#0d1a0a 0%,transparent 50%)" }} />
       <div style={{ position:"relative", maxWidth:1140, margin:"0 auto" }}>
 
@@ -141,14 +206,20 @@ export default function App() {
 
           <div style={{ display:"flex", flexDirection:"column", gap:8, alignItems:"flex-end" }}>
             <div style={{ display:"flex", gap:4, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:10, padding:4 }}>
-              {[["calendar","📅 Calendario"],["staff","👥 Empleados"]].map(([t, l]) => (
+              {[["calendar","📅 Calendario"],["staff","👥 Empleados"],["clinic","⚙ Clínica"]].map(([t, l]) => (
                 <button key={t} onClick={() => setTab(t)} style={{ background:tab===t?"rgba(255,255,255,0.08)":"none", border:tab===t?"1px solid rgba(255,255,255,0.1)":"1px solid transparent", borderRadius:7, padding:"6px 14px", cursor:"pointer", color:tab===t?"#e2e8f0":"#475569", fontSize:11, fontFamily:"monospace", letterSpacing:1 }}>{l}</button>
               ))}
             </div>
 
             <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-              <button onClick={exportState} style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(74,222,128,0.08)", border:"1px solid rgba(74,222,128,0.2)", borderRadius:7, padding:"5px 11px", cursor:"pointer", color:"#4ade80", fontSize:10, fontFamily:"monospace", letterSpacing:1 }}>↓ Exportar JSON</button>
-              <button onClick={() => fileInputRef.current?.click()} style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(96,165,250,0.08)", border:"1px solid rgba(96,165,250,0.2)", borderRadius:7, padding:"5px 11px", cursor:"pointer", color:"#60a5fa", fontSize:10, fontFamily:"monospace", letterSpacing:1 }}>↑ Importar JSON</button>
+              <div style={{ display:"flex", gap:2, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:8, padding:2 }}>
+                {[0.85,1,1.15,1.3].map(s => (
+                  <button key={s} onClick={() => setFontScale(s)} style={{ background:fontScale===s?"rgba(255,255,255,0.1)":"none", border:"none", borderRadius:5, color:fontScale===s?"#e2e8f0":"#475569", fontSize:11, fontFamily:"monospace", padding:"4px 7px", cursor:"pointer", fontWeight:700 }}>A{s===0.85?"−−":s===1?"":s===1.15?"+":"++"}
+                  </button>
+                ))}
+              </div>
+              <button onClick={exportState} style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(74,222,128,0.08)", border:"1px solid rgba(74,222,128,0.2)", borderRadius:7, padding:"5px 11px", cursor:"pointer", color:"#4ade80", fontSize:10, fontFamily:"monospace", letterSpacing:1 }}>💾 Guardar copia</button>
+              <button onClick={() => fileInputRef.current?.click()} style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(96,165,250,0.08)", border:"1px solid rgba(96,165,250,0.2)", borderRadius:7, padding:"5px 11px", cursor:"pointer", color:"#60a5fa", fontSize:10, fontFamily:"monospace", letterSpacing:1 }}>📂 Cargar copia</button>
               <input ref={fileInputRef} type="file" accept=".json" style={{ display:"none" }} onChange={e => { importState(e.target.files[0]); e.target.value = ""; }} />
               {importMsg && (
                 <span style={{ fontSize:9, fontFamily:"monospace", color:importMsg.ok?"#4ade80":"#f87171", background:importMsg.ok?"rgba(74,222,128,0.08)":"rgba(239,68,68,0.08)", border:`1px solid ${importMsg.ok?"rgba(74,222,128,0.2)":"rgba(239,68,68,0.2)"}`, borderRadius:6, padding:"4px 8px" }}>
@@ -161,7 +232,7 @@ export default function App() {
 
         {/* ── CALENDAR TAB ── */}
         {tab === "calendar" && (
-          <div style={{ display:"grid", gridTemplateColumns:"240px 1fr", gap:18, alignItems:"start" }}>
+          <div style={{ display:"grid", gridTemplateColumns:"240px 1fr 190px", gap:18, alignItems:"start" }}>
 
             {/* Left panel */}
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
@@ -200,11 +271,32 @@ export default function App() {
                 </div>
               )}
 
+              {/* External vet cost */}
+              <div style={{ background:"rgba(251,191,36,0.07)", border:"1px solid rgba(251,191,36,0.2)", borderRadius:10, padding:"10px 12px", marginTop:4 }}>
+                <div style={{ fontSize:8, letterSpacing:3, color:"#92710a", textTransform:"uppercase", marginBottom:6 }}>Cobertura externa</div>
+                <div style={{ fontSize:22, fontWeight:700, color:"#fbbf24", letterSpacing:-1, lineHeight:1 }}>
+                  {monthlyCost.cost.toLocaleString("es-ES", { minimumFractionDigits:0, maximumFractionDigits:0 })} €
+                </div>
+                <div style={{ fontSize:8, color:"#78560a", marginTop:3 }}>
+                  {monthlyCost.hours.toFixed(1)} h de hueco · {MONTHS[viewMonth]}
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:8 }}>
+                  <span style={{ fontSize:8, color:"#78560a" }}>Tarifa €/h</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={extRate}
+                    onChange={e => setExtRate(Math.max(0, Number(e.target.value)))}
+                    style={{ width:52, background:"rgba(251,191,36,0.1)", border:"1px solid rgba(251,191,36,0.25)", borderRadius:5, color:"#fbbf24", fontSize:11, fontFamily:"monospace", padding:"3px 6px", outline:"none" }}
+                  />
+                </div>
+              </div>
+
               <div style={{ marginTop:6 }}>
                 <button onClick={() => setShowYear(v => !v)} style={{ background:"none", border:"none", cursor:"pointer", color:"#1e3a5f", fontSize:8, letterSpacing:3, textTransform:"uppercase", fontFamily:"monospace", marginBottom:6, padding:0 }}>
                   {showYear ? "▼" : "▶"} Vista anual
                 </button>
-                {showYear && <YearMini year={viewYear} employees={employees} vacations={vacations} today={today} onNavigate={m => setViewMonth(m)} viewMonth={viewMonth} />}
+                {showYear && <YearMini year={viewYear} employees={employees} vacations={vacations} today={today} onNavigate={m => setViewMonth(m)} viewMonth={viewMonth} clinicConfig={clinicConfig} />}
               </div>
             </div>
 
@@ -219,52 +311,71 @@ export default function App() {
                 <button onClick={nextMonth} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:7, color:"#60a5fa", fontSize:17, width:34, height:34, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>›</button>
               </div>
 
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:3, marginBottom:4 }}>
+              {/* Day names header */}
+              <div style={{ display:"grid", gridTemplateColumns:"28px repeat(7,1fr)", gap:3, marginBottom:4 }}>
+                <div />
                 {DAYS_SHORT.map(d => <div key={d} style={{ textAlign:"center", fontSize:8, color:"#1e3a5f", letterSpacing:2, padding:"3px 0" }}>{d}</div>)}
               </div>
 
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:3 }}>
-                {cells.map((day, i) => {
-                  if (!day) return <div key={`e${i}`} />;
-                  const dayStr    = dkey(viewYear, viewMonth, day);
-                  const dow       = new Date(viewYear, viewMonth, day).getDay();
-                  const mb        = dow === 0 ? 6 : dow - 1;
-                  const isWknd    = mb >= 5;
-                  const isToday   = viewYear === today.getFullYear() && viewMonth === today.getMonth() && day === today.getDate();
-                  const onVac     = employees.filter(e => vacations[e.id]?.[dayStr]);
-                  const selOnVac  = selectedEmp && vacations[selectedEmp]?.[dayStr];
-                  const slots     = isWknd ? [] : getWorkingSlots(mb, employees, vacations, dayStr);
-                  const gaps      = isWknd ? [] : getCoverageGaps(slots);
-                  const hasGap    = gaps.length > 0;
-                  const selColor  = ROLE_COLORS[employees.find(e => e.id === selectedEmp)?.role] || "#60a5fa";
-
+              {/* Calendar — one row per week */}
+              <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                {weeks.map((week, wi) => {
+                  const weekNum = getISOWeek(new Date(week[0].year, week[0].month, week[0].day));
+                  const selColor = ROLE_COLORS[employees.find(e => e.id === selectedEmp)?.role] || "#60a5fa";
                   return (
-                    <div
-                      key={dayStr}
-                      onClick={() => {
-                        if (selectedEmp && !isWknd) toggleVacation(selectedEmp, dayStr);
-                        else if (!selectedEmp && !isWknd) setDetailDay({ dayStr, mb });
-                      }}
-                      style={{ borderRadius:8, padding:"5px 4px", cursor:isWknd?"default":"pointer", background:hasGap?"rgba(239,68,68,0.08)":selOnVac?`${selColor}18`:isWknd?"rgba(255,255,255,0.01)":"rgba(255,255,255,0.03)", border:isToday?"1.5px solid rgba(96,165,250,0.45)":hasGap?"1px solid rgba(239,68,68,0.2)":selOnVac?"1px solid rgba(96,165,250,0.2)":"1px solid rgba(255,255,255,0.04)", minHeight:80, display:"flex", flexDirection:"column", transition:"all 0.12s" }}
-                    >
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:3, padding:"0 1px" }}>
-                        <span style={{ fontSize:12, color:isWknd?"#1e3a5f":isToday?"#60a5fa":"#94a3b8", fontWeight:isToday?700:400 }}>{day}</span>
-                        {hasGap && <span style={{ fontSize:8, color:"#f87171" }}>⚠</span>}
+                    <div key={wi} style={{ display:"grid", gridTemplateColumns:"28px repeat(7,1fr)", gap:3 }}>
+                      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"center", paddingTop:6 }}>
+                        <span style={{ fontSize:7, color:"#1e3a5f", fontFamily:"monospace", letterSpacing:0 }}>W{weekNum}</span>
                       </div>
+                      {week.map((cell, di) => {
+                        const { day, month, year, outside } = cell;
+                        const dayStr = dkey(year, month, day);
+                        const dow    = new Date(year, month, day).getDay();
+                        const mb     = dow === 0 ? 6 : dow - 1;
+                        const dh     = dayClinicHours(mb);
+                        const isWknd = !dh;
+                        const isToday = year === today.getFullYear() && month === today.getMonth() && day === today.getDate();
 
-                      {onVac.length > 0 && (
-                        <div style={{ display:"flex", flexWrap:"wrap", gap:2, padding:"0 1px", marginBottom:3 }}>
-                          {onVac.map(e => (
-                            <div key={e.id} title={e.name} style={{ width:14, height:14, borderRadius:"50%", background:`${ROLE_COLORS[e.role]||"#94a3b8"}33`, border:`1px solid ${ROLE_COLORS[e.role]||"#94a3b8"}66`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:6, color:ROLE_COLORS[e.role] }}>{e.name[0]}</div>
-                          ))}
-                        </div>
-                      )}
+                        if (outside) return (
+                          <div key={di} style={{ borderRadius:8, padding:"5px 4px", minHeight:80, background:"rgba(255,255,255,0.01)", border:"1px solid rgba(255,255,255,0.02)", opacity:0.35 }}>
+                            <span style={{ fontSize:12, color:"#475569" }}>{day}</span>
+                          </div>
+                        );
 
-                      {!isWknd && (
-                        <div style={{ marginTop:"auto" }}>
-                          <CoverageTimeline dayOfWeek={mb} employees={employees} vacations={vacations} dayStr={dayStr} compact={true} />
-                        </div>
-                      )}
+                        const onVac    = employees.filter(e => vacations[e.id]?.[dayStr]);
+                        const selOnVac = selectedEmp && vacations[selectedEmp]?.[dayStr];
+                        const slots    = isWknd ? [] : withAssignment(getWorkingSlots(mb, employees, vacations, dayStr), dayStr, dh);
+                        const gaps     = isWknd ? [] : getCoverageGaps(slots, dh.open, dh.close);
+                        const hasGap   = gaps.length > 0;
+
+                        return (
+                          <div
+                            key={dayStr}
+                            onClick={() => {
+                              if (selectedEmp && !isWknd) toggleVacation(selectedEmp, dayStr);
+                              else if (!selectedEmp && !isWknd) setDetailDay({ dayStr, mb });
+                            }}
+                            style={{ borderRadius:8, padding:"5px 4px", cursor:isWknd?"default":"pointer", background:hasGap?"rgba(239,68,68,0.08)":selOnVac?`${selColor}18`:isWknd?"rgba(255,255,255,0.01)":"rgba(255,255,255,0.03)", border:isToday?"1.5px solid rgba(96,165,250,0.45)":hasGap?"1px solid rgba(239,68,68,0.2)":selOnVac?"1px solid rgba(96,165,250,0.2)":"1px solid rgba(255,255,255,0.04)", minHeight:80, display:"flex", flexDirection:"column", transition:"all 0.12s" }}
+                          >
+                            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:3, padding:"0 1px" }}>
+                              <span style={{ fontSize:12, color:isWknd?"#1e3a5f":isToday?"#60a5fa":"#94a3b8", fontWeight:isToday?700:400 }}>{day}</span>
+                              {hasGap && <span style={{ fontSize:8, color:"#f87171" }}>⚠</span>}
+                            </div>
+                            {onVac.length > 0 && (
+                              <div style={{ display:"flex", flexWrap:"wrap", gap:2, padding:"0 1px", marginBottom:3 }}>
+                                {onVac.map(e => (
+                                  <div key={e.id} title={e.name} style={{ width:14, height:14, borderRadius:"50%", background:`${ROLE_COLORS[e.role]||"#94a3b8"}33`, border:`1px solid ${ROLE_COLORS[e.role]||"#94a3b8"}66`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:6, color:ROLE_COLORS[e.role] }}>{e.name[0]}</div>
+                                ))}
+                              </div>
+                            )}
+                            {!isWknd && (
+                              <div style={{ marginTop:"auto" }}>
+                                <CoverageTimeline dayOfWeek={mb} employees={employees} vacations={vacations} dayStr={dayStr} compact={true} clinicOpen={dh.open} clinicClose={dh.close} assignedEmpId={dayAssignments[dayStr]} />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 })}
@@ -282,6 +393,60 @@ export default function App() {
                   <span style={{ fontSize:8, color:"#334155" }}>Hueco cobertura</span>
                 </div>
                 <div style={{ fontSize:8, color:"#1e3a5f" }}>· Clic en día (sin selección) para ver detalle</div>
+              </div>
+            </div>
+
+            {/* Weekly hours panel — aligned with calendar rows */}
+            <div>
+              {/* Spacer matching month-nav height (≈48px) */}
+              <div style={{ height:48 }} />
+              {/* Header matching day-names row height (≈18px) */}
+              <div style={{ height:18, display:"flex", alignItems:"center", gap:2, marginBottom:4, paddingLeft:30 }}>
+                {employees.map(emp => (
+                  <div key={emp.id} title={emp.name} style={{ flex:1, textAlign:"center", fontSize:8, color:ROLE_COLORS[emp.role]||"#94a3b8", fontWeight:700, overflow:"hidden" }}>
+                    {emp.name[0]}
+                  </div>
+                ))}
+              </div>
+              {/* One row per week */}
+              {weeks.map((week, wi) => {
+                const weekNum = getISOWeek(new Date(week[0].year, week[0].month, week[0].day));
+                return (
+                  <div key={wi} style={{ minHeight:80, marginBottom:3, display:"flex", gap:2, alignItems:"flex-start", paddingTop:3 }}>
+                    <div style={{ width:28, fontSize:7, color:"#1e3a5f", paddingTop:2, flexShrink:0, textAlign:"center", fontFamily:"monospace" }}>W{weekNum}</div>
+                    {employees.map(emp => {
+                      let weekH = 0;
+                      week.forEach(cell => {
+                        const { day, month, year } = cell;
+                        const dow2 = new Date(year, month, day).getDay();
+                        const mb2  = dow2 === 0 ? 6 : dow2 - 1;
+                        const dh2  = dayClinicHours(mb2);
+                        if (!dh2) return;
+                        const ds2  = dkey(year, month, day);
+                        if (!vacations[emp.id]?.[ds2]) weekH += shiftHours(emp.schedule[mb2]);
+                      });
+                      const hg = clinicConfig.hoursGreen ?? 25;
+                      const hr = clinicConfig.hoursRed   ?? 35;
+                      const color = weekH === 0 ? "#1e3a5f"
+                                  : weekH <= hg ? "#4ade80"
+                                  : weekH >  hr ? "#ef4444"
+                                  : "#fbbf24";
+                      return (
+                        <div key={emp.id} style={{ flex:1, textAlign:"center", fontSize:9, fontWeight:700, color, background:`${color}11`, border:`1px solid ${color}22`, borderRadius:4, padding:"3px 1px", lineHeight:"14px" }}>
+                          {weekH > 0 ? weekH.toFixed(0) : <span style={{ color:"#1e3a5f" }}>—</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+              <div style={{ display:"flex", gap:8, marginTop:6, paddingLeft:30, flexWrap:"wrap" }}>
+                {[["#4ade80",`≤${clinicConfig.hoursGreen??25}h`],["#fbbf24","medio"],["#ef4444",`>${clinicConfig.hoursRed??35}h`]].map(([c,l]) => (
+                  <div key={l} style={{ display:"flex", alignItems:"center", gap:3 }}>
+                    <div style={{ width:7,height:7,borderRadius:1,background:c+"88" }} />
+                    <span style={{ fontSize:7, color:"#334155" }}>{l}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -339,8 +504,75 @@ export default function App() {
         )}
       </div>
 
+        {/* ── CLINIC CONFIG TAB ── */}
+        {tab === "clinic" && (
+          <div style={{ maxWidth:520 }}>
+            <div style={{ fontSize:8, letterSpacing:4, color:"#334155", textTransform:"uppercase", marginBottom:18 }}>Horario de apertura</div>
+
+            {[
+              { key:"weekday",  label:"Lunes — Viernes", defaultSlot:{ open:"08:30", close:"19:00" } },
+              { key:"saturday", label:"Sábado",           defaultSlot:{ open:"09:00", close:"14:00" } },
+              { key:"sunday",   label:"Domingo",          defaultSlot:{ open:"09:00", close:"14:00" } },
+            ].map(({ key, label, defaultSlot }) => {
+              const val    = clinicConfig[key];
+              const isOpen = !!val;
+              function updateConfig(next) { setClinicConfig(next); persist({ employees, vacations, clinicConfig:next }); }
+              return (
+                <div key={key} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:10, marginBottom:8, flexWrap:"wrap" }}>
+                  <span style={{ width:140, fontSize:12, color:"#94a3b8", fontFamily:"monospace" }}>{label}</span>
+                  <button
+                    onClick={() => updateConfig({ ...clinicConfig, [key]: isOpen ? null : { ...defaultSlot } })}
+                    style={{ background:isOpen?"rgba(74,222,128,0.1)":"rgba(255,255,255,0.04)", border:`1px solid ${isOpen?"rgba(74,222,128,0.3)":"rgba(255,255,255,0.09)"}`, borderRadius:6, color:isOpen?"#4ade80":"#475569", fontSize:10, fontFamily:"monospace", padding:"4px 11px", cursor:"pointer", letterSpacing:1 }}
+                  >{isOpen ? "● Abierto" : "○ Cerrado"}</button>
+                  {isOpen && (
+                    <>
+                      <TimeInput value={val.open}  onChange={v => updateConfig({ ...clinicConfig, [key]:{ ...val, open:v  } })} color="#4ade80" />
+                      <span style={{ color:"#334155", fontSize:13 }}>—</span>
+                      <TimeInput value={val.close} onChange={v => updateConfig({ ...clinicConfig, [key]:{ ...val, close:v } })} color="#4ade80" />
+                    </>
+                  )}
+                </div>
+              );
+            })}
+
+            <div style={{ marginTop:24, fontSize:8, letterSpacing:4, color:"#334155", textTransform:"uppercase", marginBottom:14 }}>Semáforo horas / semana</div>
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              {[
+                { key:"hoursGreen", label:"Verde si ≤", color:"#4ade80" },
+                { key:"hoursRed",   label:"Rojo si >",  color:"#ef4444" },
+              ].map(({ key, label, color }) => (
+                <div key={key} style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 14px", background:`${color}0a`, border:`1px solid ${color}22`, borderRadius:10, flex:1, minWidth:140 }}>
+                  <span style={{ fontSize:11, color:"#94a3b8", fontFamily:"monospace", flex:1 }}>{label}</span>
+                  <input
+                    type="number" min="0" max="80"
+                    value={clinicConfig[key] ?? (key === "hoursGreen" ? 25 : 35)}
+                    onChange={e => {
+                      const next = { ...clinicConfig, [key]: Math.max(0, Number(e.target.value)) };
+                      setClinicConfig(next);
+                      persist({ employees, vacations, clinicConfig: next });
+                    }}
+                    style={{ width:52, background:`${color}11`, border:`1px solid ${color}33`, borderRadius:6, color, fontSize:13, fontFamily:"monospace", padding:"4px 7px", outline:"none" }}
+                  />
+                  <span style={{ fontSize:11, color:`${color}88` }}>h</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop:24, fontSize:8, letterSpacing:4, color:"#334155", textTransform:"uppercase", marginBottom:14 }}>Veterinario externo</div>
+            <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:"rgba(251,191,36,0.06)", border:"1px solid rgba(251,191,36,0.18)", borderRadius:10 }}>
+              <span style={{ fontSize:12, color:"#92710a", fontFamily:"monospace", flex:1 }}>Tarifa hora</span>
+              <input
+                type="number" min="0" value={extRate}
+                onChange={e => setExtRate(Math.max(0, Number(e.target.value)))}
+                style={{ width:70, background:"rgba(251,191,36,0.1)", border:"1px solid rgba(251,191,36,0.25)", borderRadius:6, color:"#fbbf24", fontSize:13, fontFamily:"monospace", padding:"5px 8px", outline:"none" }}
+              />
+              <span style={{ fontSize:12, color:"#78560a", fontFamily:"monospace" }}>€/h</span>
+            </div>
+          </div>
+        )}
+
       {editingEmp && <EmployeeModal emp={editingEmp} onSave={saveEmployee} onClose={() => setEditingEmp(null)} />}
-      {detailDay  && <DayDetail dayStr={detailDay.dayStr} dayOfWeek={detailDay.mb} employees={employees} vacations={vacations} onClose={() => setDetailDay(null)} />}
+      {detailDay  && (() => { const dh = dayClinicHours(detailDay.mb); return <DayDetail dayStr={detailDay.dayStr} dayOfWeek={detailDay.mb} employees={employees} vacations={vacations} onClose={() => setDetailDay(null)} clinicOpen={dh?.open} clinicClose={dh?.close} dayAssignment={dayAssignments[detailDay.dayStr]} onAssign={empId => assignDay(detailDay.dayStr, empId)} />; })()}
     </div>
   );
 }

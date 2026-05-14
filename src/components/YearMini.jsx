@@ -1,8 +1,13 @@
 import { MONTHS } from "../constants/index.js";
 import { getDaysInMonth, getFirstDow, dkey } from "../utils/calendar.js";
+import { toMin } from "../utils/time.js";
 import { getWorkingSlots, getCoverageGaps } from "../utils/coverage.js";
 
-export default function YearMini({ year, employees, vacations, today, onNavigate, viewMonth }) {
+export default function YearMini({ year, employees, vacations, today, onNavigate, viewMonth, clinicConfig }) {
+  function dayHours(mb) {
+    const cfg = mb <= 4 ? clinicConfig?.weekday : mb === 5 ? clinicConfig?.saturday : clinicConfig?.sunday;
+    return cfg ? { open: toMin(cfg.open), close: toMin(cfg.close) } : null;
+  }
   return (
     <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.05)", borderRadius:12, padding:"14px 12px" }}>
       <div style={{ fontSize:8, letterSpacing:4, color:"#1e3a5f", textTransform:"uppercase", fontFamily:"monospace", textAlign:"center", marginBottom:12 }}>Vista anual · {year}</div>
@@ -15,11 +20,12 @@ export default function YearMini({ year, employees, vacations, today, onNavigate
           for (let d = 1; d <= dim; d++) {
             const dow = new Date(year, mi, d).getDay();
             const mb  = dow === 0 ? 6 : dow - 1;
-            if (mb >= 5) continue;
+            const dh  = dayHours(mb);
+            if (!dh) continue;
             const ds = dkey(year, mi, d);
             if (employees.some(e => vacations[e.id]?.[ds])) vacDays++;
             const slots = getWorkingSlots(mb, employees, vacations, ds);
-            if (getCoverageGaps(slots).length > 0) gapDays++;
+            if (getCoverageGaps(slots, dh.open, dh.close).length > 0) gapDays++;
           }
           const cells = [];
           for (let i = 0; i < fd; i++) cells.push(null);
@@ -38,11 +44,12 @@ export default function YearMini({ year, employees, vacations, today, onNavigate
                   if (!day) return <div key={`e${i}`} style={{ height:4 }} />;
                   const dow    = new Date(year, mi, day).getDay();
                   const mb     = dow === 0 ? 6 : dow - 1;
-                  const isW    = mb >= 5;
+                  const dh     = dayHours(mb);
+                  const isW    = !dh;
                   const ds     = dkey(year, mi, day);
                   const hasVac = employees.some(e => vacations[e.id]?.[ds]);
                   const slots  = isW ? [] : getWorkingSlots(mb, employees, vacations, ds);
-                  const hasGap = !isW && getCoverageGaps(slots).length > 0;
+                  const hasGap = !isW && getCoverageGaps(slots, dh.open, dh.close).length > 0;
                   const isT    = year === today.getFullYear() && mi === today.getMonth() && day === today.getDate();
                   return <div key={day} style={{ height:4, borderRadius:1, background:hasGap?"#ef444477":hasVac?"#fbbf2455":isT?"#60a5fa88":isW?"rgba(255,255,255,0.02)":"rgba(255,255,255,0.07)" }} />;
                 })}

@@ -13,10 +13,10 @@ export function getWorkingSlots(dayOfWeek, employees, vacations, dayStr) {
     });
 }
 
-export function getCoverageGaps(slots) {
+export function getCoverageGaps(slots, clinicOpen = CLINIC_OPEN, clinicClose = CLINIC_CLOSE) {
   const vets = slots.filter(s => s.role === "veterinario");
   const gaps = [];
-  for (let t = CLINIC_OPEN; t < CLINIC_CLOSE; t++) {
+  for (let t = clinicOpen; t < clinicClose; t++) {
     const covered = vets.some(v => v.startMin <= t && v.endMin > t);
     if (!covered) gaps.push(t);
   }
@@ -26,7 +26,7 @@ export function getCoverageGaps(slots) {
   for (let i = 1; i <= gaps.length; i++) {
     if (i === gaps.length || gaps[i] !== gaps[i - 1] + 1) {
       ranges.push({ startMin: start, endMin: gaps[i - 1] + 1 });
-      start = gaps[i];
+      if (i < gaps.length) start = gaps[i];
     }
   }
   return ranges;

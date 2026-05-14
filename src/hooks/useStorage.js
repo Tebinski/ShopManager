@@ -5,16 +5,27 @@ export function useStorage() {
   const [loaded,      setLoaded]      = useState(false);
   const [saveStatus,  setSaveStatus]  = useState("saved");
   const [initialData, setInitialData] = useState(null);
-  const storageOk = useRef(false);
+  const storageOk = useRef(false); // false | "artifacts" | "local"
   const saveTimer = useRef(null);
 
   useEffect(() => {
     async function load() {
-      try { if (window.storage && typeof window.storage.get === "function") storageOk.current = true; } catch (_) {}
-      if (!storageOk.current) { setSaveStatus("nostorage"); setLoaded(true); return; }
+      try { if (window.storage && typeof window.storage.get === "function") storageOk.current = "artifacts"; } catch (_) {}
+
+      if (storageOk.current === "artifacts") {
+        try {
+          const r = await window.storage.get(STORAGE_KEY, SHARED);
+          if (r?.value) setInitialData(JSON.parse(r.value));
+        } catch (_) {}
+        setLoaded(true);
+        return;
+      }
+
+      // localStorage fallback
       try {
-        const r = await window.storage.get(STORAGE_KEY, SHARED);
-        if (r?.value) setInitialData(JSON.parse(r.value));
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) setInitialData(JSON.parse(saved));
+        storageOk.current = "local";
       } catch (_) {}
       setLoaded(true);
     }
@@ -27,7 +38,11 @@ export function useStorage() {
     setSaveStatus("saving");
     saveTimer.current = setTimeout(async () => {
       try {
-        await window.storage.set(STORAGE_KEY, JSON.stringify(data), SHARED);
+        if (storageOk.current === "artifacts") {
+          await window.storage.set(STORAGE_KEY, JSON.stringify(data), SHARED);
+        } else {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        }
         setSaveStatus("saved");
       } catch (_) {
         setSaveStatus("nostorage");

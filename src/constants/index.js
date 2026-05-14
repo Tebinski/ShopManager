@@ -9,6 +9,14 @@ export const CLINIC_CLOSE = 19 * 60;
 export const CLINIC_SPAN  = CLINIC_CLOSE - CLINIC_OPEN;
 
 export const ROLE_COLORS = { veterinario:"#4ade80", auxiliar:"#60a5fa", recepcion:"#f472b6", jefe:"#fbbf24" };
+
+export const DEFAULT_CLINIC_CONFIG = {
+  weekday:    { open: "08:30", close: "19:00" },
+  saturday:   { open: "09:00", close: "12:00" },
+  sunday:     null,
+  hoursGreen: 25,
+  hoursRed:   35,
+};
 export const ROLE_LABELS = { veterinario:"Veterinario", auxiliar:"Auxiliar", recepcion:"Recepción", jefe:"Jefe" };
 
 export const DEFAULT_DAY_SHIFT = { start:"09:00", end:"17:00" };
