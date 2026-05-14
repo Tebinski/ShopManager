@@ -1,0 +1,4 @@
+export const labelSt     = { display:"flex", flexDirection:"column", gap:6, fontSize:9, color:"#475569", fontFamily:"monospace", letterSpacing:1, textTransform:"uppercase" };
+export const inputSt     = { background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"8px 10px", color:"#e2e8f0", fontSize:13, fontFamily:"monospace", outline:"none", width:"100%", boxSizing:"border-box" };
+export const saveBtnSt   = { flex:1, background:"rgba(96,165,250,0.15)", border:"1px solid rgba(96,165,250,0.3)", borderRadius:8, padding:"10px", color:"#60a5fa", fontSize:11, fontFamily:"monospace", cursor:"pointer", letterSpacing:1 };
+export const cancelBtnSt = { flex:1, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:8, padding:"10px", color:"#475569", fontSize:11, fontFamily:"monospace", cursor:"pointer", letterSpacing:1 };
