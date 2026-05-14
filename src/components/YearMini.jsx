@@ -10,7 +10,7 @@ export default function YearMini({ year, employees, vacations, today, onNavigate
   }
   return (
     <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.05)", borderRadius:12, padding:"14px 12px" }}>
-      <div style={{ fontSize:8, letterSpacing:4, color:"#1e3a5f", textTransform:"uppercase", fontFamily:"monospace", textAlign:"center", marginBottom:12 }}>Vista anual · {year}</div>
+      <div style={{ fontSize:8, letterSpacing:4, color:"#94a3b8", textTransform:"uppercase", fontFamily:"monospace", textAlign:"center", marginBottom:12 }}>Vista anual · {year}</div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:7 }}>
         {Array.from({ length:12 }, (_, mi) => {
           const dim    = getDaysInMonth(year, mi);
@@ -62,7 +62,7 @@ export default function YearMini({ year, employees, vacations, today, onNavigate
         {[["#fbbf24","Vacaciones"],["#ef4444","Hueco cobertura"],["#60a5fa","Hoy"]].map(([c, l]) => (
           <div key={l} style={{ display:"flex", alignItems:"center", gap:3 }}>
             <div style={{ width:7, height:4, borderRadius:1, background:c+"88" }} />
-            <span style={{ fontSize:7, color:"#334155", fontFamily:"monospace" }}>{l}</span>
+            <span style={{ fontSize:7, color:"#94a3b8", fontFamily:"monospace" }}>{l}</span>
           </div>
         ))}
       </div>

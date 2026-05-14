@@ -8,24 +8,49 @@ import RoleBadge from "./RoleBadge.jsx";
 import CoverageTimeline from "./CoverageTimeline.jsx";
 import TimeInput from "./TimeInput.jsx";
 
-export default function DayDetail({ dayStr, dayOfWeek, employees, vacations, onClose, clinicOpen = CLINIC_OPEN, clinicClose = CLINIC_CLOSE, dayAssignment, onAssign, dayOverrides = {}, onOverride, onToggleVacation }) {
+const EMPTY_OVERRIDES = {};
+
+export default function DayDetail({ dayStr, dayOfWeek, employees, vacations, onClose, clinicOpen = CLINIC_OPEN, clinicClose = CLINIC_CLOSE, dayAssignment, onAssign, dayOverrides = EMPTY_OVERRIDES, onOverride, onToggleVacation }) {
   // dayAssignment may be "locumvet", a string (empId), or an object { empId, start, end, rotation }
-  const isLocumVet = dayAssignment === "locumvet";
+  const isLocumVet = dayAssignment === "locumvet" || (typeof dayAssignment === "object" && dayAssignment?.empId === "locumvet");
+  const locumStart = (typeof dayAssignment === "object" && dayAssignment?.empId === "locumvet" && dayAssignment.start) ? toMin(dayAssignment.start) : clinicOpen;
+  const locumEnd   = (typeof dayAssignment === "object" && dayAssignment?.empId === "locumvet" && dayAssignment.end)   ? toMin(dayAssignment.end)   : clinicClose;
   
   const base  = getWorkingSlots(dayOfWeek, employees, vacations, dayStr);
-  const assignObj = dayAssignment && typeof dayAssignment === "object" ? dayAssignment : (dayAssignment && dayAssignment !== "locumvet" ? { empId: dayAssignment } : null);
-  const assignedEmpId = assignObj?.empId || null;
-  const assignedEmp = assignedEmpId ? employees.find(e => e.id === assignedEmpId) : null;
+
+  // Apply saved overrides so the display reflects what was last saved
+  const effectiveBase = (() => {
+    if (dayOverrides === EMPTY_OVERRIDES || Object.keys(dayOverrides).length === 0) return base;
+    const next = [...base];
+    Object.entries(dayOverrides).forEach(([empId, ov]) => {
+      if (!ov || vacations[empId]?.[dayStr]) return;
+      const idx = next.findIndex(s => s.empId === empId);
+      if (ov.disabled) { if (idx !== -1) next.splice(idx, 1); return; }
+      const emp = employees.find(e => e.id === empId);
+      if (!emp) return;
+      const startMin = ov.start ? toMin(ov.start) : (idx !== -1 ? next[idx].startMin : clinicOpen);
+      const endMin   = ov.end   ? toMin(ov.end)   : (idx !== -1 ? next[idx].endMin   : clinicClose);
+      const slot = { empId, name: emp.name, role: emp.role, startMin, endMin };
+      if (idx !== -1) next[idx] = slot; else next.push(slot);
+    });
+    return next;
+  })();
+
+  const assignObj = (dayAssignment && typeof dayAssignment === "object") ? dayAssignment : null;
+  const assignedEmpId = dayAssignment
+    ? (typeof dayAssignment === "object" ? dayAssignment.empId : dayAssignment)
+    : null;
+  const assignedEmp = (assignedEmpId && assignedEmpId !== "locumvet") ? employees.find(e => e.id === assignedEmpId) : null;
   const slotStart = assignObj && assignObj.start ? toMin(assignObj.start) : clinicOpen;
   const slotEnd   = assignObj && assignObj.end   ? toMin(assignObj.end)   : clinicClose;
+
+  const slots = assignedEmp && !vacations[assignedEmpId]?.[dayStr] && !effectiveBase.some(s => s.empId === assignedEmpId)
+    ? [...effectiveBase, { empId: assignedEmpId, name: assignedEmp.name, role: assignedEmp.role, startMin: slotStart, endMin: slotEnd }]
+    : effectiveBase;
   
-  const slots = assignedEmp && !vacations[assignedEmpId]?.[dayStr] && !base.some(s => s.empId === assignedEmpId)
-    ? [...base, { empId: assignedEmpId, name: assignedEmp.name, role: assignedEmp.role, startMin: slotStart, endMin: slotEnd }]
-    : base;
-  
-  // Add LocumVet to slots if assigned
-  const slotsWithLocum = isLocumVet 
-    ? [...slots, { empId: "locumvet", name: "LocumVet", role: "veterinario", startMin: clinicOpen, endMin: clinicClose }]
+  // Add LocumVet to slots if assigned, using any stored custom hours
+  const slotsWithLocum = isLocumVet
+    ? [...slots, { empId: "locumvet", name: "LocumVet", role: "veterinario", startMin: locumStart, endMin: locumEnd }]
     : slots;
   
   const gaps  = getCoverageGaps(slotsWithLocum, clinicOpen, clinicClose);
@@ -43,17 +68,17 @@ export default function DayDetail({ dayStr, dayOfWeek, employees, vacations, onC
   }, [dayOverrides]);
 
   return (
-    <Modal title={label} onClose={onClose}>
+    <Modal title={label} onClose={onClose} maxWidth={760}>
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
         <div>
-          <div style={{ fontSize:9, color:"#334155", letterSpacing:2, textTransform:"uppercase", fontFamily:"monospace", marginBottom:8 }}>Cobertura del día</div>
-          <CoverageTimeline dayOfWeek={dayOfWeek} employees={employees} vacations={vacations} dayStr={dayStr} compact={false} clinicOpen={clinicOpen} clinicClose={clinicClose} assignedEmpId={dayAssignment} />
+          <div style={{ fontSize:9, color:"#94a3b8", letterSpacing:2, textTransform:"uppercase", fontFamily:"monospace", marginBottom:8 }}>Cobertura del día</div>
+          <CoverageTimeline dayOfWeek={dayOfWeek} employees={employees} vacations={vacations} dayStr={dayStr} compact={false} clinicOpen={clinicOpen} clinicClose={clinicClose} assignedEmpId={dayAssignment} dayOverrides={dayOverrides} />
         </div>
 
         <div>
-          <div style={{ fontSize:9, color:"#334155", letterSpacing:2, textTransform:"uppercase", fontFamily:"monospace", marginBottom:8 }}>Presentes ({slotsWithLocum.length})</div>
+          <div style={{ fontSize:9, color:"#94a3b8", letterSpacing:2, textTransform:"uppercase", fontFamily:"monospace", marginBottom:8 }}>Presentes ({slotsWithLocum.length})</div>
           {slotsWithLocum.length === 0
-            ? <div style={{ fontSize:11, color:"#1e3a5f" }}>Nadie trabajando</div>
+            ? <div style={{ fontSize:11, color:"#94a3b8" }}>Nadie trabajando</div>
             : slotsWithLocum.map(s => (
               <div key={s.empId} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
                 {s.empId === "locumvet" 
@@ -61,7 +86,7 @@ export default function DayDetail({ dayStr, dayOfWeek, employees, vacations, onC
                   : <RoleBadge role={s.role} small />
                 }
                 <span style={{ fontSize:12, color:"#94a3b8", fontFamily:"monospace", flex:1 }}>{s.name}</span>
-                <span style={{ fontSize:11, color:"#475569", fontFamily:"monospace" }}>{fromMin(s.startMin)} – {fromMin(s.endMin)}</span>
+                <span style={{ fontSize:11, color:"#94a3b8", fontFamily:"monospace" }}>{fromMin(s.startMin)} – {fromMin(s.endMin)}</span>
               </div>
             ))
           }
@@ -105,12 +130,12 @@ export default function DayDetail({ dayStr, dayOfWeek, employees, vacations, onC
 
               {noWork.length > 0 && (
                 <div>
-                  <div style={{ fontSize:9, color:"#64748b", letterSpacing:2, textTransform:"uppercase", fontFamily:"monospace", marginBottom:8 }}>No trabaja este día ({noWork.length})</div>
+                  <div style={{ fontSize:9, color:"#94a3b8", letterSpacing:2, textTransform:"uppercase", fontFamily:"monospace", marginBottom:8 }}>No trabaja este día ({noWork.length})</div>
                   {noWork.map(e => (
                     <div key={e.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
                       <RoleBadge role={e.role} small />
                       <span style={{ fontSize:12, color:"#94a3b8", fontFamily:"monospace" }}>{e.name}</span>
-                      <span style={{ fontSize:10, color:"#64748b", marginLeft:"auto" }}>— sin turno</span>
+                      <span style={{ fontSize:10, color:"#94a3b8", marginLeft:"auto" }}>— sin turno</span>
                     </div>
                   ))}
                 </div>
@@ -121,7 +146,7 @@ export default function DayDetail({ dayStr, dayOfWeek, employees, vacations, onC
 
         {onOverride && (
           <div>
-            <div style={{ fontSize:9, color:"#334155", letterSpacing:2, textTransform:"uppercase", fontFamily:"monospace", marginBottom:8 }}>Editar horarios por empleado</div>
+            <div style={{ fontSize:9, color:"#94a3b8", letterSpacing:2, textTransform:"uppercase", fontFamily:"monospace", marginBottom:8 }}>Editar horarios por empleado</div>
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
               {employees.map(emp => {
                 const isVac = !!vacations[emp.id]?.[dayStr];
@@ -132,14 +157,14 @@ export default function DayDetail({ dayStr, dayOfWeek, employees, vacations, onC
                 const disabled = !!ov.disabled;
                 return (
                   <div key={emp.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
-                    <RoleBadge role={emp.role} small />
-                    <span style={{ fontSize:12, color:"#94a3b8", fontFamily:"monospace", flex:1 }}>{emp.name}</span>
+                    <div style={{ width:82, flexShrink:0 }}><RoleBadge role={emp.role} small /></div>
+                    <span style={{ fontSize:12, color:"#94a3b8", fontFamily:"monospace", width:130, flexShrink:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{emp.name}</span>
                     {isVac ? (
                       <span style={{ fontSize:10, color:"#fbbf24", marginLeft:"auto" }}>☀ Vacaciones</span>
                     ) : (
                       <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                         <TimeInput value={startVal} onChange={v => setLocalOverrides(prev => ({ ...prev, [emp.id]: { ...(prev[emp.id]||{}), start: v } }))} color="#60a5fa" />
-                        <span style={{ color:"#334155" }}>—</span>
+                        <span style={{ color:"#94a3b8" }}>—</span>
                         <TimeInput value={endVal} onChange={v => setLocalOverrides(prev => ({ ...prev, [emp.id]: { ...(prev[emp.id]||{}), end: v } }))} color="#60a5fa" />
                         <label style={{ display:"flex", alignItems:"center", gap:6, color:"#94a3b8", fontSize:12 }}>
                           <input type="checkbox" checked={disabled} onChange={e => setLocalOverrides(prev => ({ ...prev, [emp.id]: { ...(prev[emp.id]||{}), disabled: e.target.checked } }))} /> No trabaja
@@ -168,7 +193,7 @@ export default function DayDetail({ dayStr, dayOfWeek, employees, vacations, onC
 
         {onAssign && (
           <div>
-            <div style={{ fontSize:9, color:"#334155", letterSpacing:2, textTransform:"uppercase", fontFamily:"monospace", marginBottom:8 }}>Reasignar cobertura</div>
+            <div style={{ fontSize:9, color:"#94a3b8", letterSpacing:2, textTransform:"uppercase", fontFamily:"monospace", marginBottom:8 }}>Reasignar cobertura</div>
             <div style={{ display:"flex", gap:8, alignItems:"center" }}>
               <select
                 value={selEmp}
@@ -183,32 +208,28 @@ export default function DayDetail({ dayStr, dayOfWeek, employees, vacations, onC
               </select>
             </div>
 
-            {selEmp && selEmp !== "locumvet" && (
+            {selEmp && (
               <div style={{ display:"flex", gap:8, alignItems:"center", marginTop:8 }}>
-                <TimeInput value={start} onChange={v => setStart(v)} color="#60a5fa" />
-                <span style={{ color:"#334155" }}>—</span>
-                <TimeInput value={end} onChange={v => setEnd(v)} color="#60a5fa" />
-                <label style={{ display:"flex", alignItems:"center", gap:6, marginLeft:8, color:"#94a3b8", fontSize:12 }}>
-                  <input type="checkbox" checked={rotation} onChange={e => setRotation(e.target.checked)} /> Rotación
-                </label>
-              </div>
-            )}
-
-            {selEmp === "locumvet" && (
-              <div style={{ fontSize:10, color:"#fbbf24", marginTop:8, fontStyle:"italic" }}>
-                LocumVet trabajará {fromMin(clinicOpen)} – {fromMin(clinicClose)}
+                <TimeInput value={start} onChange={v => setStart(v)} color={selEmp === "locumvet" ? "#fbbf24" : "#60a5fa"} />
+                <span style={{ color:"#94a3b8" }}>—</span>
+                <TimeInput value={end} onChange={v => setEnd(v)} color={selEmp === "locumvet" ? "#fbbf24" : "#60a5fa"} />
+                {selEmp !== "locumvet" && (
+                  <label style={{ display:"flex", alignItems:"center", gap:6, marginLeft:8, color:"#94a3b8", fontSize:12 }}>
+                    <input type="checkbox" checked={rotation} onChange={e => setRotation(e.target.checked)} /> Rotación
+                  </label>
+                )}
               </div>
             )}
 
             <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:8 }}>
-              <button onClick={() => { 
-                if (!selEmp) { 
-                  onAssign(null); 
+              <button onClick={() => {
+                if (!selEmp) {
+                  onAssign(null);
                 } else if (selEmp === "locumvet") {
-                  onAssign("locumvet");
-                } else { 
-                  onAssign({ empId: selEmp, start, end, rotation }); 
-                } 
+                  onAssign({ empId: "locumvet", start, end });
+                } else {
+                  onAssign({ empId: selEmp, start, end, rotation });
+                }
               }} style={{ background:"rgba(74,222,128,0.08)", border:"1px solid rgba(74,222,128,0.18)", color:"#4ade80", padding:"6px 10px", borderRadius:8, cursor:"pointer", fontSize:11 }}>Guardar</button>
               <button onClick={() => onAssign(null)} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", color:"#94a3b8", padding:"6px 10px", borderRadius:8, cursor:"pointer", fontSize:11 }}>Quitar</button>
             </div>

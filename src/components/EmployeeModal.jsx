@@ -60,7 +60,7 @@ export default function EmployeeModal({ emp, onSave, onClose }) {
 
         <div style={labelSt}>
           Horario semanal
-          <div style={{ fontSize:9, color:"#334155", marginBottom:6 }}>Semana típica · {totalHours.toFixed(1)}h/semana</div>
+          <div style={{ fontSize:9, color:"#94a3b8", marginBottom:6 }}>Semana típica · {totalHours.toFixed(1)}h/semana</div>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
             {DAYS_FULL.map((day, i) => {
               const shift  = form.schedule[i];
@@ -74,12 +74,12 @@ export default function EmployeeModal({ emp, onSave, onClose }) {
                   {shift ? (
                     <>
                       <TimeInput value={shift.start} onChange={v => setShift(i, "start", v)} color={color} />
-                      <span style={{ fontSize:10, color:"#334155" }}>→</span>
+                      <span style={{ fontSize:10, color:"#94a3b8" }}>→</span>
                       <TimeInput value={shift.end} onChange={v => setShift(i, "end", v)} color={color} />
-                      <span style={{ fontSize:9, color:"#334155", fontFamily:"monospace" }}>{shiftHours(shift).toFixed(1)}h</span>
+                      <span style={{ fontSize:9, color:"#94a3b8", fontFamily:"monospace" }}>{shiftHours(shift).toFixed(1)}h</span>
                     </>
                   ) : (
-                    <span style={{ fontSize:9, color:"#1e3a5f", fontFamily:"monospace" }}>No trabaja</span>
+                    <span style={{ fontSize:9, color:"#94a3b8", fontFamily:"monospace" }}>No trabaja</span>
                   )}
                 </div>
               );

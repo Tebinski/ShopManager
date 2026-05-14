@@ -233,7 +233,8 @@ export default function App() {
       if (!dh) continue;
       const ds    = dkey(viewYear, viewMonth, d);
       // Skip if day is covered by LocumVet
-      if (dayAssignments[ds] === "locumvet") continue;
+      const dsAssign = dayAssignments[ds];
+      if (dsAssign === "locumvet" || (typeof dsAssign === "object" && dsAssign?.empId === "locumvet")) continue;
       const slots = withAssignment(getWorkingSlots(mb, employees, vacations, ds), ds, dh);
       getCoverageGaps(slots, dh.open, dh.close).forEach(g => { totalMin += g.endMin - g.startMin; });
     }
@@ -291,7 +292,7 @@ export default function App() {
 
   if (!loaded) return (
     <div style={{ minHeight:"100vh", background:"#070e18", display:"flex", alignItems:"center", justifyContent:"center" }}>
-      <span style={{ fontFamily:"monospace", fontSize:11, letterSpacing:4, color:"#1e3a5f", textTransform:"uppercase" }}>Cargando…</span>
+      <span style={{ fontFamily:"monospace", fontSize:11, letterSpacing:4, color:"#94a3b8", textTransform:"uppercase" }}>Cargando…</span>
     </div>
   );
 
@@ -342,7 +343,7 @@ export default function App() {
 
             {/* Left panel */}
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-              <div style={{ fontSize:8, letterSpacing:4, color:"#1e3a5f", textTransform:"uppercase", marginBottom:2 }}>Selecciona empleado</div>
+              <div style={{ fontSize:8, letterSpacing:4, color:"#94a3b8", textTransform:"uppercase", marginBottom:2 }}>Selecciona empleado</div>
               {employees.map(emp => {
                 const isSel   = selectedEmp === emp.id;
                 const isHidden = hiddenEmps.includes(emp.id);
@@ -368,7 +369,7 @@ export default function App() {
                     <div style={{ background:"rgba(255,255,255,0.05)", borderRadius:2, height:3, overflow:"hidden" }}>
                       <div style={{ height:"100%", width:`${Math.min((used / (emp.annualHours || 1)) * 100, 100)}%`, background:over?"#ef4444":c, borderRadius:2, transition:"width 0.3s" }} />
                     </div>
-                    <div style={{ fontSize:8, color:"#334155", marginTop:3 }}>
+                    <div style={{ fontSize:8, color:"#94a3b8", marginTop:3 }}>
                       <span style={{ color:over?"#f87171":"#475569" }}>{used.toFixed(0)}h</span>/{emp.annualHours}h{over && <span style={{ color:"#f87171" }}> ⚠</span>}
                     </div>
                   </div>
@@ -378,8 +379,8 @@ export default function App() {
               {selectedEmp && (
                 <div style={{ padding:"8px 10px", background:"rgba(96,165,250,0.08)", border:"1px solid rgba(96,165,250,0.15)", borderRadius:8 }}>
                   <div style={{ fontSize:8, color:"#60a5fa", letterSpacing:1, marginBottom:3 }}>MODO EDICIÓN</div>
-                  <div style={{ fontSize:9, color:"#475569" }}>Clic en día → marcar vacaciones de <span style={{ color:"#94a3b8" }}>{employees.find(e => e.id === selectedEmp)?.name.split(" ")[0]}</span></div>
-                  <button onClick={() => setSelectedEmp(null)} style={{ marginTop:7, background:"none", border:"1px solid rgba(255,255,255,0.07)", borderRadius:5, color:"#475569", fontSize:8, padding:"3px 8px", cursor:"pointer", fontFamily:"monospace" }}>Deseleccionar</button>
+                  <div style={{ fontSize:9, color:"#94a3b8" }}>Clic en día → marcar vacaciones de <span style={{ color:"#94a3b8" }}>{employees.find(e => e.id === selectedEmp)?.name.split(" ")[0]}</span></div>
+                  <button onClick={() => setSelectedEmp(null)} style={{ marginTop:7, background:"none", border:"1px solid rgba(255,255,255,0.07)", borderRadius:5, color:"#94a3b8", fontSize:8, padding:"3px 8px", cursor:"pointer", fontFamily:"monospace" }}>Deseleccionar</button>
                 </div>
               )}
 
@@ -405,7 +406,7 @@ export default function App() {
               </div>
 
               <div style={{ marginTop:6 }}>
-                <button onClick={() => setShowYear(v => !v)} style={{ background:"none", border:"none", cursor:"pointer", color:"#1e3a5f", fontSize:8, letterSpacing:3, textTransform:"uppercase", fontFamily:"monospace", marginBottom:6, padding:0 }}>
+                <button onClick={() => setShowYear(v => !v)} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", fontSize:8, letterSpacing:3, textTransform:"uppercase", fontFamily:"monospace", marginBottom:6, padding:0 }}>
                   {showYear ? "▼" : "▶"} Vista anual
                 </button>
                 {showYear && <YearMini year={viewYear} employees={employees} vacations={vacations} today={today} onNavigate={m => setViewMonth(m)} viewMonth={viewMonth} clinicConfig={clinicConfig} />}
@@ -418,7 +419,7 @@ export default function App() {
                 <button onClick={prevMonth} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:7, color:"#60a5fa", fontSize:17, width:34, height:34, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>
                 <div style={{ textAlign:"center" }}>
                   <div style={{ fontSize:18, color:"#f1f5f9" }}>{MONTHS[viewMonth]}</div>
-                  <div style={{ fontSize:10, color:"#334155" }}>{viewYear}</div>
+                  <div style={{ fontSize:10, color:"#94a3b8" }}>{viewYear}</div>
                 </div>
                 <button onClick={nextMonth} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:7, color:"#60a5fa", fontSize:17, width:34, height:34, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>›</button>
               </div>
@@ -426,7 +427,7 @@ export default function App() {
               {/* Day names header */}
               <div style={{ display:"grid", gridTemplateColumns:"28px repeat(7,1fr)", gap:3, marginBottom:4 }}>
                 <div />
-                {DAYS_SHORT.map(d => <div key={d} style={{ textAlign:"center", fontSize:8, color:"#1e3a5f", letterSpacing:2, padding:"3px 0" }}>{d}</div>)}
+                {DAYS_SHORT.map(d => <div key={d} style={{ textAlign:"center", fontSize:8, color:"#94a3b8", letterSpacing:2, padding:"3px 0" }}>{d}</div>)}
               </div>
 
               {/* Calendar — one row per week */}
@@ -437,7 +438,7 @@ export default function App() {
                   return (
                     <div key={wi} style={{ display:"grid", gridTemplateColumns:"28px repeat(7,1fr)", gap:3 }}>
                       <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"center", paddingTop:6 }}>
-                        <span style={{ fontSize:7, color:"#1e3a5f", fontFamily:"monospace", letterSpacing:0 }}>W{weekNum}</span>
+                        <span style={{ fontSize:7, color:"#94a3b8", fontFamily:"monospace", letterSpacing:0 }}>W{weekNum}</span>
                       </div>
                       {week.map((cell, di) => {
                         const { day, month, year, outside } = cell;
@@ -450,7 +451,7 @@ export default function App() {
 
                         if (outside) return (
                           <div key={di} style={{ borderRadius:8, padding:"5px 4px", minHeight:80, background:"rgba(255,255,255,0.01)", border:"1px solid rgba(255,255,255,0.02)", opacity:0.35 }}>
-                            <span style={{ fontSize:12, color:"#475569" }}>{day}</span>
+                            <span style={{ fontSize:12, color:"#94a3b8" }}>{day}</span>
                           </div>
                         );
 
@@ -497,14 +498,14 @@ export default function App() {
                 {employees.map(e => (
                   <div key={e.id} style={{ display:"flex", alignItems:"center", gap:4 }}>
                     <div style={{ width:12, height:12, borderRadius:"50%", background:`${ROLE_COLORS[e.role]}33`, border:`1px solid ${ROLE_COLORS[e.role]}66`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:6, color:ROLE_COLORS[e.role] }}>{e.name[0]}</div>
-                    <span style={{ fontSize:8, color:"#334155" }}>{e.name.split(" ")[0]}</span>
+                    <span style={{ fontSize:8, color:"#94a3b8" }}>{e.name.split(" ")[0]}</span>
                   </div>
                 ))}
                 <div style={{ display:"flex", alignItems:"center", gap:4 }}>
                   <div style={{ width:20, height:5, borderRadius:2, background:"rgba(239,68,68,0.6)" }} />
-                  <span style={{ fontSize:8, color:"#334155" }}>Hueco cobertura</span>
+                  <span style={{ fontSize:8, color:"#94a3b8" }}>Hueco cobertura</span>
                 </div>
-                <div style={{ fontSize:8, color:"#1e3a5f" }}>· Clic en día (sin selección) para ver detalle</div>
+                <div style={{ fontSize:8, color:"#94a3b8" }}>· Clic en día (sin selección) para ver detalle</div>
               </div>
             </div>
 
@@ -525,7 +526,7 @@ export default function App() {
                 const weekNum = getISOWeek(new Date(week[0].year, week[0].month, week[0].day));
                 return (
                   <div key={wi} style={{ minHeight:80, marginBottom:3, display:"flex", gap:2, alignItems:"flex-start", paddingTop:3 }}>
-                    <div style={{ width:28, fontSize:7, color:"#1e3a5f", paddingTop:2, flexShrink:0, textAlign:"center", fontFamily:"monospace" }}>W{weekNum}</div>
+                    <div style={{ width:28, fontSize:7, color:"#94a3b8", paddingTop:2, flexShrink:0, textAlign:"center", fontFamily:"monospace" }}>W{weekNum}</div>
                     {employees.map(emp => {
                       let weekH = 0;
                       week.forEach(cell => {
@@ -545,7 +546,7 @@ export default function App() {
                                   : "#fbbf24";
                       return (
                         <div key={emp.id} style={{ flex:1, textAlign:"center", fontSize:9, fontWeight:700, color, background:`${color}11`, border:`1px solid ${color}22`, borderRadius:4, padding:"3px 1px", lineHeight:"14px" }}>
-                          {weekH > 0 ? weekH.toFixed(0) : <span style={{ color:"#1e3a5f" }}>—</span>}
+                          {weekH > 0 ? weekH.toFixed(0) : <span style={{ color:"#94a3b8" }}>—</span>}
                         </div>
                       );
                     })}
@@ -556,7 +557,7 @@ export default function App() {
                 {[["#4ade80",`≤${clinicConfig.hoursGreen??25}h`],["#fbbf24","medio"],["#ef4444",`>${clinicConfig.hoursRed??35}h`]].map(([c,l]) => (
                   <div key={l} style={{ display:"flex", alignItems:"center", gap:3 }}>
                     <div style={{ width:7,height:7,borderRadius:1,background:c+"88" }} />
-                    <span style={{ fontSize:7, color:"#334155" }}>{l}</span>
+                    <span style={{ fontSize:7, color:"#94a3b8" }}>{l}</span>
                   </div>
                 ))}
               </div>
@@ -620,7 +621,7 @@ export default function App() {
         {/* ── VETCOVERAGE TAB ── */}
         {tab === "coverage" && (
           <div>
-            <div style={{ fontSize:8, letterSpacing:4, color:"#334155", textTransform:"uppercase", marginBottom:14 }}>
+            <div style={{ fontSize:8, letterSpacing:4, color:"#94a3b8", textTransform:"uppercase", marginBottom:14 }}>
               Cobertura mensual · {MONTHS[viewMonth]} {viewYear}
             </div>
 
@@ -658,7 +659,7 @@ export default function App() {
                   const wn = getISOWeek(new Date(week[0].year, week[0].month, week[0].day));
                   return (
                     <div key={wi} style={{ width:7*24, flexShrink:0, borderLeft:"1px solid rgba(255,255,255,0.07)", paddingLeft:3 }}>
-                      <span style={{ fontSize:7, color:"#1e3a5f", fontFamily:"monospace" }}>W{wn}</span>
+                      <span style={{ fontSize:7, color:"#94a3b8", fontFamily:"monospace" }}>W{wn}</span>
                     </div>
                   );
                 })}
@@ -772,7 +773,7 @@ export default function App() {
                 {cells.map((cell, i) => {
                   const { day, month, year, outside } = cell;
                   const ds = dkey(year, month, day);
-                  const isLocumVet = dayAssignments[ds] === "locumvet";
+                  const isLocumVet = dayAssignments[ds] === "locumvet" || (typeof dayAssignments[ds] === "object" && dayAssignments[ds]?.empId === "locumvet");
                   const isToday2 = year===today.getFullYear()&&month===today.getMonth()&&day===today.getDate();
                   const bg = isLocumVet ? "rgba(251,191,36,0.3)" : "transparent";
                   return (
@@ -788,7 +789,7 @@ export default function App() {
                 {[["#4ade80","Trabaja"],["#4ade8035","Vacaciones ☀"],["#fbbf2433","LocumVet ✓"],["rgba(255,255,255,0.02)","Clínica cerrada"],["transparent","No trabaja ese día"]].map(([bg, text]) => (
                   <div key={text} style={{ display:"flex", alignItems:"center", gap:5 }}>
                     <div style={{ width:12, height:12, borderRadius:2, background:bg, border:"1px solid rgba(255,255,255,0.1)" }} />
-                    <span style={{ fontSize:8, color:"#475569" }}>{text}</span>
+                    <span style={{ fontSize:8, color:"#94a3b8" }}>{text}</span>
                   </div>
                 ))}
               </div>
@@ -800,7 +801,7 @@ export default function App() {
         {tab === "staff" && (
           <div style={{ maxWidth:640 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-              <div style={{ fontSize:8, letterSpacing:4, color:"#334155", textTransform:"uppercase" }}>{employees.length} empleados</div>
+              <div style={{ fontSize:8, letterSpacing:4, color:"#94a3b8", textTransform:"uppercase" }}>{employees.length} empleados</div>
               <button onClick={() => setEditingEmp({ id:uid(), name:"", role:"veterinario", annualHours:1760, schedule:[...DEFAULT_SCHEDULE] })} style={{ background:"rgba(74,222,128,0.1)", border:"1px solid rgba(74,222,128,0.25)", borderRadius:8, color:"#4ade80", fontSize:11, fontFamily:"monospace", padding:"7px 14px", cursor:"pointer", letterSpacing:1 }}>
                 + Añadir empleado
               </button>
@@ -822,7 +823,7 @@ export default function App() {
                           <span style={{ fontSize:13, color:"#e2e8f0" }}>{emp.name}</span>
                           <RoleBadge role={emp.role} small />
                         </div>
-                        <div style={{ fontSize:9, color:"#334155" }}>
+                        <div style={{ fontSize:9, color:"#94a3b8" }}>
                           {weekHours.toFixed(1)}h/sem · {used.toFixed(0)}/{emp.annualHours}h año{over && <span style={{ color:"#f87171" }}> ⚠</span>}
                         </div>
                         <div style={{ display:"flex", gap:4, marginTop:6, flexWrap:"wrap" }}>
@@ -831,7 +832,7 @@ export default function App() {
                               {DAYS_SHORT[i]} {s.start}–{s.end}
                             </span>
                           ) : (
-                            <span key={i} style={{ fontSize:8, fontFamily:"monospace", color:"#1e3a5f", padding:"1px 3px" }}>{DAYS_SHORT[i]}</span>
+                            <span key={i} style={{ fontSize:8, fontFamily:"monospace", color:"#94a3b8", padding:"1px 3px" }}>{DAYS_SHORT[i]}</span>
                           ))}
                         </div>
                       </div>
@@ -871,7 +872,7 @@ export default function App() {
                   {isOpen && (
                     <>
                       <TimeInput value={val.open}  onChange={v => updateConfig({ ...clinicConfig, [key]:{ ...val, open:v  } })} color="#4ade80" />
-                      <span style={{ color:"#334155", fontSize:13 }}>—</span>
+                      <span style={{ color:"#94a3b8", fontSize:13 }}>—</span>
                       <TimeInput value={val.close} onChange={v => updateConfig({ ...clinicConfig, [key]:{ ...val, close:v } })} color="#4ade80" />
                     </>
                   )}
@@ -902,7 +903,7 @@ export default function App() {
               ))}
             </div>
 
-            <div style={{ marginTop:24, fontSize:8, letterSpacing:4, color:"#334155", textTransform:"uppercase", marginBottom:14 }}>Veterinario externo</div>
+            <div style={{ marginTop:24, fontSize:8, letterSpacing:4, color:"#94a3b8", textTransform:"uppercase", marginBottom:14 }}>Veterinario externo</div>
             <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:"rgba(251,191,36,0.12)", border:"1px solid rgba(251,191,36,0.30)", borderRadius:10 }}>
               <span style={{ fontSize:12, color:"#92710a", fontFamily:"monospace", flex:1 }}>Tarifa hora</span>
               <input
@@ -933,7 +934,7 @@ export default function App() {
                 ))}
               </div>
             ) : (
-              <div style={{ fontSize:11, color:"#475569" }}>No hay huecos tras el cambio.</div>
+              <div style={{ fontSize:11, color:"#94a3b8" }}>No hay huecos tras el cambio.</div>
             )}
           </div>
           <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:8 }}>
@@ -943,7 +944,7 @@ export default function App() {
         </Modal>
       )}
       {editingEmp && <EmployeeModal emp={editingEmp} onSave={saveEmployee} onClose={() => setEditingEmp(null)} />}
-      {detailDay  && (() => { const dh = dayClinicHours(detailDay.mb); const overrides = dayOverrides[detailDay.dayStr] || {}; return <DayDetail dayStr={detailDay.dayStr} dayOfWeek={detailDay.mb} employees={employees} vacations={vacations} onClose={() => setDetailDay(null)} clinicOpen={dh?.open} clinicClose={dh?.close} dayAssignment={dayAssignments[detailDay.dayStr]} dayOverrides={overrides} onAssign={empId => assignDay(detailDay.dayStr, empId)} onOverride={(empId, ov) => updateDayOverride(detailDay.dayStr, empId, ov)} onToggleVacation={toggleVacation} />; })()}
+      {detailDay  && (() => { const dh = dayClinicHours(detailDay.mb); return <DayDetail dayStr={detailDay.dayStr} dayOfWeek={detailDay.mb} employees={employees} vacations={vacations} onClose={() => setDetailDay(null)} clinicOpen={dh?.open} clinicClose={dh?.close} dayAssignment={dayAssignments[detailDay.dayStr]} dayOverrides={dayOverrides[detailDay.dayStr]} onAssign={empId => assignDay(detailDay.dayStr, empId)} onOverride={(empId, ov) => updateDayOverride(detailDay.dayStr, empId, ov)} onToggleVacation={toggleVacation} />; })()}
     </div>
   );
 }

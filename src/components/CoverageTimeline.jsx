@@ -2,22 +2,49 @@ import { CLINIC_OPEN, CLINIC_CLOSE, ROLE_COLORS } from "../constants/index.js";
 import { fromMin, toMin } from "../utils/time.js";
 import { getWorkingSlots, getCoverageGaps } from "../utils/coverage.js";
 
+const EMPTY_OVERRIDES = {};
+
 function slotColor(s, employees) {
+  if (s.empId === "locumvet") return "#fbbf24";
   const emp = employees.find(e => e.id === s.empId);
   return emp?.color || ROLE_COLORS[s.role] || "#94a3b8";
 }
 
-export default function CoverageTimeline({ dayOfWeek, employees, vacations, dayStr, compact, clinicOpen = CLINIC_OPEN, clinicClose = CLINIC_CLOSE, assignedEmpId }) {
+export default function CoverageTimeline({ dayOfWeek, employees, vacations, dayStr, compact, clinicOpen = CLINIC_OPEN, clinicClose = CLINIC_CLOSE, assignedEmpId, dayOverrides = EMPTY_OVERRIDES }) {
   const base = getWorkingSlots(dayOfWeek, employees, vacations, dayStr);
-  // assignedEmpId may be a string (empId) or an object { empId, start, end }
+
+  // Apply per-day overrides so the timeline reflects saved changes
+  const effectiveBase = (() => {
+    if (dayOverrides === EMPTY_OVERRIDES || Object.keys(dayOverrides).length === 0) return base;
+    const next = [...base];
+    Object.entries(dayOverrides).forEach(([empId, ov]) => {
+      if (!ov || vacations[empId]?.[dayStr]) return;
+      const idx = next.findIndex(s => s.empId === empId);
+      if (ov.disabled) { if (idx !== -1) next.splice(idx, 1); return; }
+      const emp = employees.find(e => e.id === empId);
+      if (!emp) return;
+      const startMin = ov.start ? toMin(ov.start) : (idx !== -1 ? next[idx].startMin : clinicOpen);
+      const endMin   = ov.end   ? toMin(ov.end)   : (idx !== -1 ? next[idx].endMin   : clinicClose);
+      const slot = { empId, name: emp.name, role: emp.role, startMin, endMin };
+      if (idx !== -1) next[idx] = slot; else next.push(slot);
+    });
+    return next;
+  })();
+
+  // assignedEmpId may be a string (empId/"locumvet") or an object { empId, start, end }
   const assignObj = assignedEmpId && typeof assignedEmpId === "object" ? assignedEmpId : (assignedEmpId ? { empId: assignedEmpId } : null);
   const assignedEmpIdStr = assignObj?.empId || null;
-  const assignedEmp = assignedEmpIdStr ? employees.find(e => e.id === assignedEmpIdStr) : null;
+  const isLocumVet = assignedEmpIdStr === "locumvet";
+  const assignedEmp = (!isLocumVet && assignedEmpIdStr) ? employees.find(e => e.id === assignedEmpIdStr) : null;
   const assignedStart = assignObj && assignObj.start ? toMin(assignObj.start) : clinicOpen;
   const assignedEnd   = assignObj && assignObj.end   ? toMin(assignObj.end)   : clinicClose;
-  const slots = assignedEmp && !vacations[assignedEmpIdStr]?.[dayStr] && !base.some(s => s.empId === assignedEmpIdStr)
-    ? [...base, { empId: assignedEmpIdStr, name: assignedEmp.name, role: assignedEmp.role, startMin: assignedStart, endMin: assignedEnd }]
-    : base;
+  const slots = (() => {
+    if (isLocumVet && !effectiveBase.some(s => s.empId === "locumvet"))
+      return [...effectiveBase, { empId: "locumvet", name: "LocumVet", role: "veterinario", startMin: assignedStart, endMin: assignedEnd }];
+    if (assignedEmp && !vacations[assignedEmpIdStr]?.[dayStr] && !effectiveBase.some(s => s.empId === assignedEmpIdStr))
+      return [...effectiveBase, { empId: assignedEmpIdStr, name: assignedEmp.name, role: assignedEmp.role, startMin: assignedStart, endMin: assignedEnd }];
+    return effectiveBase;
+  })();
   const gaps   = getCoverageGaps(slots, clinicOpen, clinicClose);
   const hasGap = gaps.length > 0;
 
@@ -50,7 +77,7 @@ export default function CoverageTimeline({ dayOfWeek, employees, vacations, dayS
     <div>
       <div style={{ position:"relative", height:14, marginBottom:2 }}>
         {ticks.map(t => (
-          <div key={t} style={{ position:"absolute", left:(t - clinicOpen) * ratio, fontSize:7, color:"#334155", fontFamily:"monospace", transform:"translateX(-50%)" }}>
+          <div key={t} style={{ position:"absolute", left:(t - clinicOpen) * ratio, fontSize:7, color:"#94a3b8", fontFamily:"monospace", transform:"translateX(-50%)" }}>
             {fromMin(t)}
           </div>
         ))}
