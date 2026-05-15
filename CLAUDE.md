@@ -96,3 +96,8 @@ npm run lint      # linting
 - Los estilos son 100% inline — no hay clases CSS ni ficheros `.css`.
 - El array `schedule` tiene siempre 7 posiciones (índice 0 = lunes).
 - `SHARED = true` hace que el storage sea compartido entre instancias del mismo artifact.
+Si llegas al límite:
+- guarda estado
+- escribe TODO pendiente
+- genera script de continuación
+- indica desde dónde reanudar

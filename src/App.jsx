@@ -126,6 +126,18 @@ export default function App() {
     persist({ employees, vacations, clinicConfig, dayAssignments, dayOverrides: next });
   }
 
+  function restoreDay(dayStr, assignment, overrides) {
+    const nextAssignments = { ...dayAssignments };
+    if (assignment == null) delete nextAssignments[dayStr];
+    else nextAssignments[dayStr] = assignment;
+    setDayAssignments(nextAssignments);
+    const nextOverrides = { ...dayOverrides };
+    if (!overrides || Object.keys(overrides).length === 0) delete nextOverrides[dayStr];
+    else nextOverrides[dayStr] = { ...overrides };
+    setDayOverrides(nextOverrides);
+    persist({ employees, vacations, clinicConfig, dayAssignments: nextAssignments, dayOverrides: nextOverrides });
+  }
+
   function saveEmployee(emp) {
     const next = employees.some(e => e.id === emp.id)
       ? employees.map(e => e.id === emp.id ? emp : e)
@@ -944,7 +956,7 @@ export default function App() {
         </Modal>
       )}
       {editingEmp && <EmployeeModal emp={editingEmp} onSave={saveEmployee} onClose={() => setEditingEmp(null)} />}
-      {detailDay  && (() => { const dh = dayClinicHours(detailDay.mb); return <DayDetail dayStr={detailDay.dayStr} dayOfWeek={detailDay.mb} employees={employees} vacations={vacations} onClose={() => setDetailDay(null)} clinicOpen={dh?.open} clinicClose={dh?.close} dayAssignment={dayAssignments[detailDay.dayStr]} dayOverrides={dayOverrides[detailDay.dayStr]} onAssign={empId => assignDay(detailDay.dayStr, empId)} onOverride={(empId, ov) => updateDayOverride(detailDay.dayStr, empId, ov)} onToggleVacation={toggleVacation} />; })()}
+      {detailDay  && (() => { const dh = dayClinicHours(detailDay.mb); return <DayDetail dayStr={detailDay.dayStr} dayOfWeek={detailDay.mb} employees={employees} vacations={vacations} onClose={() => setDetailDay(null)} clinicOpen={dh?.open} clinicClose={dh?.close} dayAssignment={dayAssignments[detailDay.dayStr]} dayOverrides={dayOverrides[detailDay.dayStr]} onAssign={empId => assignDay(detailDay.dayStr, empId)} onOverride={(empId, ov) => updateDayOverride(detailDay.dayStr, empId, ov)} onRestore={snap => restoreDay(detailDay.dayStr, snap.assignment, snap.overrides)} onToggleVacation={toggleVacation} />; })()}
     </div>
   );
 }
